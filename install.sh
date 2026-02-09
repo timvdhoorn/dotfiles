@@ -63,6 +63,12 @@ else
   ok "Dotfiles cloned to $DOTFILES_DIR"
 fi
 
+# Re-exec from local copy to ensure latest version runs
+if [[ "${DOTFILES_BOOTSTRAPPED:-}" != "1" ]]; then
+  export DOTFILES_BOOTSTRAPPED=1
+  exec bash "$DOTFILES_DIR/install.sh" "$@"
+fi
+
 # === Step 2: Install packages ===
 if [[ "$OS" == "macos" ]]; then
   if ! command -v brew &> /dev/null; then
