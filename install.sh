@@ -2,108 +2,171 @@
 
 set -e
 
-echo "🚀 Powerlevel10k + Zsh setup voor Debian/Ubuntu"
+# === Colors ===
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# --- Systeemcheck ---
-if ! grep -qiE "(debian|ubuntu)" /etc/os-release; then
-  echo "❌ Alleen bedoeld voor Debian/Ubuntu systemen"
-  exit 1
+info()  { echo -e "${BLUE}[INFO]${NC} $1"; }
+ok()    { echo -e "${GREEN}[OK]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+# === OS Detection ===
+OS="unknown"
+if [[ "$OSTYPE" == darwin* ]]; then
+  OS="macos"
+elif [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+  if [[ "$ID" == "debian" || "$ID" == "ubuntu" || "$ID_LIKE" == *"debian"* ]]; then
+    OS="linux"
+  fi
 fi
 
-# --- Vereisten ---
-echo "📦 Installing dependencies..."
-sudo apt update
-sudo apt install -y git curl zsh unzip fontconfig
-
-# --- Zsh als standaard shell ---
-if [ "$SHELL" != "$(which zsh)" ]; then
-  echo "🌀 Zsh wordt ingesteld als standaard shell"
-  chsh -s "$(which zsh)"
-  echo "⚠️  Log uit en weer in om de shell-wijziging te activeren"
+if [[ "$OS" == "unknown" ]]; then
+  error "Unsupported OS. This script supports macOS and Debian/Ubuntu."
 fi
 
-# --- Oh My Zsh ---
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
-  echo "💡 Installing Oh My Zsh..."
-  RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-fi
+info "Detected OS: $OS"
 
+# === Configuration ===
+DOTFILES_DIR="$HOME/.dotfiles"
+BACKUP_SUFFIX=".backup.$(date +%Y%m%d_%H%M%S)"
 ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 
-# --- Powerlevel10k ---
-if [ ! -d "$ZSH_CUSTOM/themes/powerlevel10k" ]; then
-  echo "🎨 Installing Powerlevel10k..."
-  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k"
-fi
+# === Helper: backup and symlink ===
+link_file() {
+  local src="$1"
+  local dst="$2"
 
-# --- Plugins ---
-declare -A plugins=(
-  [zsh-autosuggestions]="https://github.com/zsh-users/zsh-autosuggestions"
-  [zsh-autocomplete]="https://github.com/marlonrichert/zsh-autocomplete"
-  [fast-syntax-highlighting]="https://github.com/zdharma-continuum/fast-syntax-highlighting"
-  [zsh-history-substring-search]="https://github.com/zsh-users/zsh-history-substring-search"
-)
-
-for name in "${!plugins[@]}"; do
-  dest="$ZSH_CUSTOM/plugins/$name"
-  if [ ! -d "$dest" ]; then
-    echo "🔌 Installing plugin: $name"
-    git clone --depth=1 "${plugins[$name]}" "$dest"
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    info "Backing up $dst -> ${dst}${BACKUP_SUFFIX}"
+    mv "$dst" "${dst}${BACKUP_SUFFIX}"
+  elif [[ -L "$dst" ]]; then
+    rm "$dst"
   fi
-done
 
-# --- Nerd Font: JetBrainsMono NF ---
-FONT_DIR="$HOME/.local/share/fonts"
-mkdir -p "$FONT_DIR"
+  ln -s "$src" "$dst"
+  ok "Linked $src -> $dst"
+}
 
-echo "🔤 Installing JetBrainsMono Nerd Font..."
-JETBRAINS_URL_BASE="https://github.com/ryanoasis/nerd-fonts/releases/latest/download"
-FONT_ZIP="JetBrainsMono.zip"
-
-if [ ! -f "$FONT_DIR/JetBrainsMonoNerdFont-Regular.ttf" ]; then
-  echo "Downloading JetBrainsMono Nerd Font..."
-  curl -fsSL "$JETBRAINS_URL_BASE/$FONT_ZIP" -o "/tmp/$FONT_ZIP"
-  unzip -o "/tmp/$FONT_ZIP" -d "$FONT_DIR"
-  rm "/tmp/$FONT_ZIP"
-fi
-
-fc-cache -f "$FONT_DIR"
-
-echo "✅ Font geïnstalleerd. Zet je terminal-font op 'JetBrainsMono Nerd Font'."
-
-# --- Configs downloaden ---
-REPO_URL="https://raw.githubusercontent.com/timvdhoorn/powerlevel10k-debian/main"
-
-echo "⚙️ Downloading .zshrc and .p10k.zsh"
-
-# Backup bestaande .zshrc als deze bestaat
-if [ -f "$HOME/.zshrc" ]; then
-  cp "$HOME/.zshrc" "$HOME/.zshrc.backup.$(date +%Y%m%d_%H%M%S)"
-  echo "💾 Backup gemaakt van bestaande .zshrc"
-fi
-
-# Backup bestaande .p10k.zsh
-[ -f "$HOME/.p10k.zsh" ] && cp "$HOME/.p10k.zsh" "$HOME/.p10k.zsh.backup.$(date +%Y%m%d_%H%M%S)"
-
-# Download .zshrc
-if curl -fsSL "$REPO_URL/.zshrc" -o "$HOME/.zshrc.tmp"; then
-  mv "$HOME/.zshrc.tmp" "$HOME/.zshrc"
-  echo "✅ .zshrc gedownload"
+# === Step 1: Clone or update dotfiles ===
+if [[ -d "$DOTFILES_DIR" ]]; then
+  info "Updating existing dotfiles..."
+  git -C "$DOTFILES_DIR" pull --rebase --quiet
+  ok "Dotfiles updated"
 else
-  echo "❌ Fout bij downloaden van .zshrc"
-  exit 1
+  info "Cloning dotfiles..."
+  git clone https://github.com/timvdhoorn/dotfiles.git "$DOTFILES_DIR"
+  ok "Dotfiles cloned to $DOTFILES_DIR"
 fi
 
-if curl -fsSL "$REPO_URL/.p10k.zsh" -o "$HOME/.p10k.zsh.tmp"; then
-  mv "$HOME/.p10k.zsh.tmp" "$HOME/.p10k.zsh"
-  echo "✅ .p10k.zsh gedownload"
+# === Step 2: Install packages ===
+if [[ "$OS" == "macos" ]]; then
+  if ! command -v brew &> /dev/null; then
+    info "Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  fi
+
+  info "Installing packages via Homebrew..."
+  brew install zsh git eza bat fzf zoxide tmux tpm powerlevel10k 2>/dev/null || true
+
+  # zsh plugins via Homebrew
+  brew install zsh-autosuggestions zsh-autocomplete fast-syntax-highlighting 2>/dev/null || true
+  ok "Homebrew packages installed"
+
+elif [[ "$OS" == "linux" ]]; then
+  info "Installing packages via apt..."
+  sudo apt update -qq
+  sudo apt install -y -qq zsh git curl tmux
+
+  # Optional modern CLI tools (may not be in default repos)
+  for pkg in eza bat fzf zoxide; do
+    if ! command -v "$pkg" &> /dev/null; then
+      sudo apt install -y -qq "$pkg" 2>/dev/null || warn "$pkg not available in apt, skipping"
+    fi
+  done
+  ok "Apt packages installed"
+fi
+
+# === Step 3: Oh My Zsh ===
+if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+  info "Installing Oh My Zsh..."
+  RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  ok "Oh My Zsh installed"
 else
-  echo "❌ Fout bij downloaden van .p10k.zsh"
-  exit 1
+  ok "Oh My Zsh already installed"
 fi
 
+# === Step 4: Zsh plugins (Linux only, macOS uses Homebrew) ===
+if [[ "$OS" == "linux" ]]; then
+  ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+
+  declare -A plugins=(
+    [zsh-autosuggestions]="https://github.com/zsh-users/zsh-autosuggestions"
+    [zsh-autocomplete]="https://github.com/marlonrichert/zsh-autocomplete"
+    [fast-syntax-highlighting]="https://github.com/zdharma-continuum/fast-syntax-highlighting"
+  )
+
+  for name in "${!plugins[@]}"; do
+    dest="$ZSH_CUSTOM/plugins/$name"
+    if [[ ! -d "$dest" ]]; then
+      info "Installing plugin: $name"
+      git clone --depth=1 "${plugins[$name]}" "$dest"
+    fi
+  done
+
+  # Powerlevel10k theme
+  if [[ ! -d "$ZSH_CUSTOM/themes/powerlevel10k" ]]; then
+    info "Installing Powerlevel10k..."
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k"
+  fi
+  ok "Zsh plugins installed"
+fi
+
+# === Step 5: TPM (Tmux Plugin Manager) ===
+if [[ "$OS" == "linux" && ! -d "$HOME/.tmux/plugins/tpm" ]]; then
+  info "Installing TPM..."
+  git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+  ok "TPM installed"
+fi
+
+# === Step 6: Symlinks ===
+info "Creating symlinks..."
+link_file "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+link_file "$DOTFILES_DIR/.p10k.zsh" "$HOME/.p10k.zsh"
+link_file "$DOTFILES_DIR/.tmux.conf" "$HOME/.tmux.conf"
+
+# === Step 7: Set zsh as default shell ===
+if [[ "$SHELL" != *"zsh"* ]]; then
+  info "Setting zsh as default shell..."
+  chsh -s "$(which zsh)"
+  warn "Log out and back in for the shell change to take effect"
+fi
+
+# === Step 8: Install TPM plugins ===
+if command -v tmux &> /dev/null; then
+  if [[ -f "$HOME/.tmux/plugins/tpm/bin/install_plugins" ]]; then
+    info "Installing tmux plugins..."
+    "$HOME/.tmux/plugins/tpm/bin/install_plugins" 2>/dev/null || true
+  elif [[ "$OS" == "macos" && -f "/opt/homebrew/opt/tpm/share/tpm/bin/install_plugins" ]]; then
+    info "Installing tmux plugins..."
+    /opt/homebrew/opt/tpm/share/tpm/bin/install_plugins 2>/dev/null || true
+  fi
+fi
+
+# === Done ===
 echo ""
-echo "✅ Setup voltooid!"
-echo "🔄 Start een nieuwe terminal of voer 'zsh' uit."
-echo "🎨 Configureer je terminal om 'JetBrainsMono Nerd Font' als font te gebruiken."
+ok "Setup complete!"
 echo ""
+echo "Next steps:"
+echo "  1. Install a Nerd Font (e.g., JetBrainsMono Nerd Font)"
+echo "     https://www.nerdfonts.com/font-downloads"
+echo "  2. Set your terminal font to the installed Nerd Font"
+echo "  3. Start a new terminal or run: exec zsh"
+echo "  4. Start tmux and press prefix + I to install plugins"
+echo ""
+echo "To update later: cd ~/.dotfiles && git pull"
