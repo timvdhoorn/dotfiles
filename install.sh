@@ -87,7 +87,7 @@ if [[ "$OS" == "macos" ]]; then
 elif [[ "$OS" == "linux" ]]; then
   info "Installing packages via apt..."
   sudo apt update -qq
-  sudo apt install -y -qq zsh git curl tmux
+  sudo apt install -y -qq zsh git curl tmux xclip
 
   # Optional modern CLI tools (may not be in default repos)
   for pkg in eza bat fzf zoxide; do
