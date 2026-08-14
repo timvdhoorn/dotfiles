@@ -192,3 +192,13 @@ chpwd_functions+=(_tmux_rename_session)
 
 # === OTHER ===
 alias lzd='lazydocker'
+
+# Grok Build (when installed)
+export PATH="$HOME/.grok/bin:$PATH"
+if [[ -d "$HOME/.grok/completions/zsh" ]]; then
+  fpath=("$HOME/.grok/completions/zsh" $fpath)
+  autoload -Uz compinit && compinit -C
+fi
+
+# Shared user-local development toolchain (when installed)
+[[ -r "$HOME/.config/agent-paths.zsh" ]] && source "$HOME/.config/agent-paths.zsh"
