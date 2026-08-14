@@ -32,10 +32,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/timvdhoorn/dotfiles/main/ins
 - **zoxide** - smarter `cd`
 
 ### macOS (via Homebrew)
-All packages installed via `brew install`.
+All packages installed via Homebrew.
 
 ### Linux (via apt + git clone)
-Base packages via `apt`, Zsh plugins and Powerlevel10k via git clone.
+Base packages via `apt`, Zsh plugins and Powerlevel10k via git clone. Only missing apt packages are installed on repeat runs.
 
 ## Update
 
@@ -58,3 +58,6 @@ Press `` ` + I `` (prefix + Shift-i) inside tmux to install plugins.
 
 ### Powerlevel10k prompt looks wrong
 Run `p10k configure` to reconfigure the prompt.
+
+### T3 or SSH input is duplicated, cursor keys fail, or backspace inserts spaces
+Ghostty uses `TERM=xterm-ghostty`, but some remote hosts do not ship that terminfo entry yet. The zsh profile detects this before loading prompt or ZLE plugins and falls back to the widely supported `xterm-256color` entry.

@@ -85,17 +85,28 @@ if [[ "$OS" == "macos" ]]; then
   ok "Homebrew packages installed"
 
 elif [[ "$OS" == "linux" ]]; then
-  info "Installing packages via apt..."
-  sudo apt update -qq
-  sudo apt install -y -qq zsh git curl tmux xclip
+  required_packages=()
+  for command_package in "zsh:zsh" "git:git" "curl:curl" "tmux:tmux" "xclip:xclip"; do
+    command_name="${command_package%%:*}"
+    package_name="${command_package##*:}"
+    command -v "$command_name" &> /dev/null || required_packages+=("$package_name")
+  done
+
+  if (( ${#required_packages[@]} )); then
+    info "Installing required packages via apt: ${required_packages[*]}"
+    sudo apt update -qq
+    sudo apt install -y -qq "${required_packages[@]}"
+  else
+    ok "Required apt packages already installed"
+  fi
 
   # Optional modern CLI tools (may not be in default repos)
   for pkg in eza bat fzf zoxide; do
-    if ! command -v "$pkg" &> /dev/null; then
+    if ! command -v "$pkg" &> /dev/null && [[ ! ( "$pkg" == "bat" && -x /usr/bin/batcat ) ]]; then
       sudo apt install -y -qq "$pkg" 2>/dev/null || warn "$pkg not available in apt, skipping"
     fi
   done
-  ok "Apt packages installed"
+  ok "Linux packages ready"
 fi
 
 # === Step 3: Oh My Zsh ===
@@ -125,7 +136,6 @@ if [[ "$OS" == "linux" ]]; then
     fi
   done
 
-  # Powerlevel10k theme
   if [[ ! -d "$ZSH_CUSTOM/themes/powerlevel10k" ]]; then
     info "Installing Powerlevel10k..."
     git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$ZSH_CUSTOM/themes/powerlevel10k"
@@ -147,9 +157,16 @@ link_file "$DOTFILES_DIR/.p10k.zsh" "$HOME/.p10k.zsh"
 link_file "$DOTFILES_DIR/.tmux.conf" "$HOME/.tmux.conf"
 
 # === Step 7: Set zsh as default shell ===
-if [[ "$SHELL" != *"zsh"* ]]; then
-  info "Setting zsh as default shell..."
-  chsh -s "$(which zsh)"
+target_shell="$(command -v zsh)"
+
+current_shell="$(getent passwd "$USER" 2>/dev/null | cut -d: -f7 || true)"
+if [[ -z "$current_shell" ]]; then
+  current_shell="$SHELL"
+fi
+
+if [[ "$current_shell" != "$target_shell" ]]; then
+  info "Setting $target_shell as default shell..."
+  chsh -s "$target_shell"
   warn "Log out and back in for the shell change to take effect"
 fi
 

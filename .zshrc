@@ -1,3 +1,9 @@
+# Ghostty advertises xterm-ghostty, but older remote hosts may not ship its
+# terminfo entry yet. Fall back before any prompt or ZLE plugin reads terminfo.
+if [[ "$TERM" == "xterm-ghostty" ]] && ! infocmp xterm-ghostty &>/dev/null; then
+  export TERM=xterm-256color
+fi
+
 # Suppress instant prompt warnings (output from plugins is expected)
 typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
 
